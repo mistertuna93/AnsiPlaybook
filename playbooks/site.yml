@@ -1,0 +1,5 @@
+- name: Master site playbook
+  hosts: all
+  become: yes
+  roles:
+    - common
