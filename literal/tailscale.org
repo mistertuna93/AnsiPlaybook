@@ -1,0 +1,63 @@
+#+TITLE: Tailscale Role
+#+AUTHOR: Your Name
+#+PROPERTY: header-args :tangle ../roles/tailscale/tasks/main.yml
+#+TAGS: :ENABLED:yes:
+
+* Overview
+:PROPERTIES:
+:ENABLED: yes
+:END:
+
+#+BEGIN_NOTE
+This role installs and configures Tailscale on a target machine. It ensures the system has Tailscale installed, authenticated, and optionally sets it as an exit node or advertises routes.
+#+END_NOTE
+
+* Tasks
+
+#+BEGIN_SRC yaml
+- name: Ensure apt cache is updated
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install dependencies
+  ansible.builtin.apt:
+    name: ["curl", "gnupg", "lsb-release"]
+    state: present
+
+- name: Add Tailscale GPG key
+  ansible.builtin.apt_key:
+    url: https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release | lower }}.noarmor.gpg
+    state: present
+
+- name: Add Tailscale repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://pkgs.tailscale.com/stable/ubuntu {{ ansible_distribution_release | lower }} main"
+    state: present
+    filename: "tailscale"
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: latest
+
+- name: Enable and start Tailscale
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: yes
+    state: started
+
+- name: Login to Tailscale
+  ansible.builtin.shell: |
+    tailscale up --authkey={{ tailscale_authkey }} {% if advertise_exit_node %} --advertise-exit-node {% endif %}{% if advertise_routes %} --advertise-routes={{ advertise_routes }} {% endif %}
+  args:
+    creates: /var/lib/tailscale/tailscaled.state
+#+END_SRC
+
+* Variables
+
+#+BEGIN_SRC yaml :tangle ../roles/tailscale/vars/main.yml
+tailscale_authkey: ""
+advertise_exit_node: false
+advertise_routes: ""
+#+END_SRC

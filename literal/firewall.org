@@ -1,0 +1,78 @@
+#+TITLE: firewall.org - Firewall setup with ufw
+#+AUTHOR: Your Name
+#+DATE: 2025-05-31
+#+OPTIONS: toc:nil
+
+* Firewall Role - Setup UFW for basic server protection
+  This role configures the Uncomplicated Firewall (ufw) on Ubuntu servers.
+  It ensures only essential traffic is allowed and everything else is blocked by default.
+  The configuration includes rules to allow SSH, Tailscale network traffic, and any other specified ports.
+
+  #+BEGIN_NOTE
+  This role is designed to be simple but can be extended for complex rules or other firewall software.
+  You can customize the allowed ports by modifying the variables.
+  #+END_NOTE
+
+** Variables
+   - `firewall_allowed_ports` - List of ports to allow (default: SSH port 22)
+   - `firewall_allow_tailscale` - Boolean to allow all Tailscale interface traffic (default: true)
+
+** Ansible Role Code
+
+#+BEGIN_SRC yaml :tangle firewall.yml :noweb yes :comments yes
+---
+- name: Configure UFW firewall
+  hosts: all
+  become: yes
+  vars:
+    firewall_allowed_ports:
+      - 22
+    firewall_allow_tailscale: true
+
+  tasks:
+    - name: Ensure ufw is installed
+      apt:
+        name: ufw
+        state: present
+        update_cache: yes
+
+    - name: Reset ufw to default state (disable and reset rules)
+      command: ufw reset
+      ignore_errors: yes
+
+    - name: Set default ufw policies
+      ufw:
+        state: reset
+    - name: Set default deny incoming policy
+      ufw:
+        direction: incoming
+        policy: deny
+
+    - name: Set default allow outgoing policy
+      ufw:
+        direction: outgoing
+        policy: allow
+
+    - name: Allow SSH port
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ firewall_allowed_ports }}"
+
+    - name: Allow Tailscale interface if enabled
+      when: firewall_allow_tailscale
+      ufw:
+        rule: allow
+        interface: tailscale0
+
+    - name: Enable UFW logging
+      ufw:
+        logging: on
+
+    - name: Enable ufw
+      ufw:
+        state: enabled
+        enabled: yes
+        immediate: yes
+#+END_SRC

@@ -1,0 +1,144 @@
+#+TITLE: Cluster Bootstrap Guide
+#+AUTHOR: mist3rtuna
+#+DATE: 2025-05-31
+#+PROPERTY: HEADER-ARGS:emacs-lisp :tangle no
+#+PROPERTY: DOCS: bootstrap
+#+PROPERTY: ENABLED: true
+#+OPTIONS: toc:2
+
+* Overview
+This file serves as the entry point for configuring, tangling, managing, and deploying your infrastructure from Org-mode. It covers:
+
+- ✅ Prerequisites & environment setup
+- ✅ Org-mode tangling instructions
+- ✅ Ansible playbook structure
+- ✅ Deployment procedure
+- ✅ Inventory and secrets guidance
+
+* Tangling Behavior
+This document is configured to tangle *all documentation files* when saved.
+
+Other Org documents (like ~common.org~, ~dns.org~, etc.) only tangle *their own role tasks* when saved unless configured otherwise.
+
+You can manage this behavior in your Emacs config via dir-locals or Org hooks.
+
+#+BEGIN_SRC emacs-lisp
+;; Tangle all documentation files on save (for this file only)
+(defun docs-tangle-all-on-save ()
+  (when (string-suffix-p "00-bootstrap.org" (buffer-file-name))
+    (dolist (file (directory-files "./literal" t "\\.org$"))
+      (with-current-buffer (find-file-noselect file)
+        (org-babel-tangle)))))
+
+(add-hook 'after-save-hook #'docs-tangle-all-on-save)
+#+END_SRC
+
+* Prerequisites
+
+Before deploying, ensure the following:
+
+1. Org-mode files are complete with ~:ENABLED: true~ and paths are correct
+2. All hosts are defined in ~inventory.yml~
+3. SSH keys are available and trusted for your Ansible control node
+4. Kubernetes cluster is initialized or bootstrapped (e.g., with k3s)
+5. Vaulted secrets and values (if used) are configured via `sealed-secrets`, `ansible-vault`, or `sops`
+
+* Org Files to Review
+
+| Module         | Path                     | Enabled | Layout     |
+|----------------+--------------------------+---------+------------|
+| Common         | ./literal/common.org     | true    | base       |
+| Tailscale      | ./literal/tailscale.org  | true    | app        |
+| SSH Hardening  | ./literal/ssh.org        | true    | security   |
+| Fail2Ban       | ./literal/fail2ban.org   | true    | security   |
+| Firewall       | ./literal/firewall.org   | true    | security   |
+| Monitor        | ./literal/monitor.org    | true    | monitor    |
+| DNS            | ./literal/dns.org        | true    | dns        |
+| Secrets        | ./literal/secrets.org    | true    | security   |
+| Git Server     | ./literal/git.org        | true    | service    |
+
+Modify the ~:ENABLED:~ property in each file header to toggle modules.
+
+* Inventory Setup
+
+Edit your ~inventory.yml~ like this:
+
+#+BEGIN_SRC yaml
+all:
+  hosts:
+    node01:
+      ansible_host: 192.168.1.101
+    node02:
+      ansible_host: 192.168.1.102
+  children:
+    masters:
+      hosts:
+        node01:
+    workers:
+      hosts:
+        node02:
+#+END_SRC
+
+* Tangling All Modules
+
+Use =org-babel-tangle= within each file, or run the following function to tangle all files in the =literal/= directory:
+
+#+BEGIN_SRC emacs-lisp
+(defun tangle-all-literal-org ()
+  (interactive)
+  (dolist (file (directory-files "./literal" t "\\.org$"))
+    (with-current-buffer (find-file-noselect file)
+      (org-babel-tangle))))
+#+END_SRC
+
+Bind it to a key or run it manually from Emacs M-x.
+
+* Playbook Usage
+
+Once files are tangled, run the playbook:
+
+#+BEGIN_SRC shell
+ansible-playbook playbook/playbook.yml -i inventory.yml
+#+END_SRC
+
+You can test first with:
+
+#+BEGIN_SRC shell
+ansible-playbook playbook/playbook.yml -i inventory.yml --check --diff
+#+END_SRC
+
+* What to Encrypt with Sealed Secrets or Vault
+
+Encrypt the following kinds of values:
+
+- API keys
+- SSH private keys or sensitive configs
+- Kubeconfig credentials
+- User tokens
+- Any secret environment variables
+
+If using `sealed-secrets` in Kubernetes, you can include them in manifests and commit the sealed output.
+
+* File Ignore Recommendations
+
+Add this to your `.gitignore`:
+
+*.elc
+*.log
+*.bak
+.kube/
+*.pyc
+__pycache__/
+*.retry
+.retry
+.swp
+.swo
+.venv/
+literal/**/tasks/.yml
+playbook/.yml
+secrets/**/.yaml
+
+
+
+
+

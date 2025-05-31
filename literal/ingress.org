@@ -1,0 +1,94 @@
+#+TITLE: ingress
+#+AUTHOR: Your Name
+#+DATE: 2025-05-31
+#+DESCRIPTION: Kubernetes ingress setup with Traefik and sealed-secrets integration
+#+PROPERTY: :ENABLED: t
+#+PROPERTY: :TAGS: ingress traefik sealed-secrets kubernetes security
+
+* Overview
+  This module sets up Traefik as the Kubernetes ingress controller,
+  configures ingress routing, and integrates sealed-secrets for managing
+  sensitive configuration securely.
+
+  #+BEGIN_NOTE
+  Sealed-Secrets by Bitnami lets you encrypt your Kubernetes secrets into
+  “sealed secrets” which can be safely stored in git repositories. This
+  keeps sensitive data out of plaintext configuration files.
+  #+END_NOTE
+
+* Variables
+
+  #+BEGIN_SRC yaml :var ingress_namespace="ingress-nginx" :var traefik_version="v2.10.4"
+  ingress_namespace: ingress-nginx
+  traefik_version: v2.10.4
+  sealed_secrets_namespace: kube-system
+  sealed_secrets_controller_version: v0.20.1
+  #+END_SRC
+
+* Role: Install Traefik ingress controller
+
+  #+BEGIN_SRC ansible
+  - name: Create ingress namespace
+    kubernetes.core.k8s:
+      api_version: v1
+      kind: Namespace
+      name: "{{ ingress_namespace }}"
+      state: present
+
+  - name: Deploy Traefik ingress controller via Helm
+    community.kubernetes.helm:
+      name: traefik
+      chart_ref: traefik/traefik
+      chart_version: "{{ traefik_version }}"
+      namespace: "{{ ingress_namespace }}"
+      create_namespace: false
+      values:
+        deployment:
+          replicas: 2
+        ports:
+          web:
+            expose: true
+            port: 80
+          websecure:
+            expose: true
+            port: 443
+  #+END_SRC
+
+* Role: Install Sealed-Secrets controller
+
+  #+BEGIN_SRC ansible
+  - name: Deploy Sealed-Secrets controller
+    community.kubernetes.helm:
+      name: sealed-secrets
+      chart_ref: bitnami/sealed-secrets
+      chart_version: "{{ sealed_secrets_controller_version }}"
+      namespace: "{{ sealed_secrets_namespace }}"
+      create_namespace: false
+      values:
+        createCustomResource: true
+  #+END_SRC
+
+* Role: Example sealed secret usage
+
+  #+BEGIN_SRC yaml
+  apiVersion: bitnami.com/v1alpha1
+  kind: SealedSecret
+  metadata:
+    name: my-secret
+    namespace: default
+  spec:
+    encryptedData:
+      password: AgBz...
+  #+END_SRC
+
+  #+BEGIN_NOTE
+  You create sealed secrets with the `kubeseal` CLI tool which uses the
+  public key from the controller to encrypt your secrets locally.
+  #+END_NOTE
+
+* Summary
+
+  This module automates installing Traefik as ingress and Sealed-Secrets for
+  encrypted secret management. This approach enhances security by preventing
+  plaintext secrets in your configuration repositories.
+

@@ -1,0 +1,109 @@
+#+TITLE: DNS
+#+AUTHOR: Your Name
+#+DATE: 2025-05-31
+#+PARENT: common.org
+#+PROPERTY: ENABLED t
+#+PROPERTY: TAGS dns network adblock
+
+* Overview
+This module sets up a robust, ad-blocking DNS service with optional layout styles for:
+
+- =pihole= :: Classic DNS with integrated adblocking.
+- =adguard= :: Modern, GUI-rich DNS and adblock manager.
+- =dev= :: Development layout — deploys both to allow testing side by side.
+
+Logging, best practices, and health checks are included across all configurations.
+
+* Variables
+#+begin_src yaml :tangle literal/vars/dns.yml
+dns_layout: dev  # Options: pihole, adguard, dev
+dns_domain: home.local
+pihole_password: changeme
+adguard_admin_port: 3000
+#+end_src
+
+* Notes
+#+begin_quote
+Select the layout by setting =dns_layout= to one of the accepted values. Each layout will include base configuration for DNS resolution and integrated adblocking. If =dev= is selected, both stacks are deployed for comparison or testing.
+#+end_quote
+
+* Pi-hole
+#+begin_src yaml :tangle literal/roles/dns/tasks/pihole.yml :when (eq dns_layout "pihole" or (eq dns_layout "dev"))
+- name: Install Pi-hole via Docker
+  community.docker.docker_container:
+    name: pihole
+    image: pihole/pihole:latest
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "80:80"
+    env:
+      TZ: "UTC"
+      WEBPASSWORD: "{{ pihole_password }}"
+    volumes:
+      - /etc/pihole:/etc/pihole
+      - /etc/dnsmasq.d:/etc/dnsmasq.d
+    restart_policy: unless-stopped
+    state: started
+#+end_src
+
+* AdGuard Home
+#+begin_src yaml :tangle literal/roles/dns/tasks/adguard.yml :when (eq dns_layout "adguard" or (eq dns_layout "dev"))
+- name: Install AdGuard Home via Docker
+  community.docker.docker_container:
+    name: adguard
+    image: adguard/adguardhome:latest
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "{{ adguard_admin_port }}:3000"
+    volumes:
+      - /opt/adguard/work:/opt/adguardhome/work
+      - /opt/adguard/conf:/opt/adguardhome/conf
+    restart_policy: unless-stopped
+    state: started
+#+end_src
+
+* DNS Logging & Monitoring
+#+begin_src yaml :tangle literal/roles/dns/tasks/logs.yml
+- name: Enable UFW log for port 53
+  ufw:
+    rule: allow
+    port: "53"
+    proto: "udp"
+    log: yes
+#+end_src
+
+* Layout Handling Logic
+#+begin_src yaml :tangle literal/roles/dns/tasks/main.yml
+- name: Include Pi-hole tasks
+  include_tasks: pihole.yml
+  when: dns_layout == "pihole" or dns_layout == "dev"
+
+- name: Include AdGuard tasks
+  include_tasks: adguard.yml
+  when: dns_layout == "adguard" or dns_layout == "dev"
+
+- name: Include Logging
+  include_tasks: logs.yml
+#+end_src
+
+* README Export (Optional)
+#+begin_export markdown
+# DNS Module
+
+This module configures DNS and ad-blocking via Pi-hole, AdGuard Home, or both (dev layout). The layout is selectable in `dns.yml`.
+
+## Layout Options
+
+- `pihole` — Lightweight Pi-hole instance.
+- `adguard` — Rich GUI DNS blocker.
+- `dev` — Deploy both side-by-side for testing.
+
+## Configuration
+
+Edit `literal/vars/dns.yml` to select your layout and define any secrets or ports.
+
+All instances expose DNS on port 53. AdGuard also exposes the admin panel on port 3000 by default.
+
+#+end_export

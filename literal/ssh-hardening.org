@@ -1,0 +1,140 @@
+#+TITLE: SSH Hardening Ansible Role
+#+AUTHOR: Your Name
+#+DATE: 2025-05-31
+#+DESCRIPTION: Ansible role to harden SSH server configuration, enable UFW rules, and setup fail2ban.
+#+TAGS: ansible role ssh security
+
+* Overview
+  This role secures SSH access by:
+  - Enforcing secure SSH server settings
+  - Enabling UFW firewall with SSH allowed
+  - Setting up fail2ban to mitigate brute-force attacks
+
+  #+BEGIN_NOTE
+  Make sure to backup your SSH config before applying changes.
+  Test access on a non-critical system first to avoid lockouts.
+  #+END_NOTE
+
+* Tasks
+
+** Configure UFW Firewall
+   - Ensure UFW is installed and enabled
+   - Allow SSH and other necessary ports
+
+#+BEGIN_SRC yaml :tangle ssh-hardening/tasks/ufw.yml
+---
+- name: Install UFW
+  apt:
+    name: ufw
+    state: present
+    update_cache: yes
+
+- name: Allow SSH port through UFW
+  ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+    policy: deny
+  when: ansible_facts['ufw']['status'] != 'active'
+#+END_SRC
+
+** Harden SSH Server Config
+
+#+BEGIN_SRC yaml :tangle ssh-hardening/tasks/ssh.yml
+---
+- name: Backup existing sshd_config
+  copy:
+    src: /etc/ssh/sshd_config
+    dest: /etc/ssh/sshd_config.bak
+    remote_src: yes
+    backup: yes
+
+- name: Set SSH server options
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+    create: yes
+  loop:
+    - { regexp: '^PermitRootLogin', line: 'PermitRootLogin no' }
+    - { regexp: '^PasswordAuthentication', line: 'PasswordAuthentication no' }
+    - { regexp: '^ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication no' }
+    - { regexp: '^UsePAM', line: 'UsePAM yes' }
+    - { regexp: '^X11Forwarding', line: 'X11Forwarding no' }
+    - { regexp: '^AllowTcpForwarding', line: 'AllowTcpForwarding no' }
+    - { regexp: '^MaxAuthTries', line: 'MaxAuthTries 3' }
+
+- name: Restart SSH service
+  service:
+    name: ssh
+    state: restarted
+    enabled: yes
+#+END_SRC
+
+** Setup Fail2ban
+
+#+BEGIN_SRC yaml :tangle ssh-hardening/tasks/fail2ban.yml
+---
+- name: Install fail2ban
+  apt:
+    name: fail2ban
+    state: present
+    update_cache: yes
+
+- name: Copy fail2ban sshd jail config
+  copy:
+    src: files/jail.local
+    dest: /etc/fail2ban/jail.local
+    mode: '0644'
+
+- name: Restart fail2ban
+  service:
+    name: fail2ban
+    state: restarted
+    enabled: yes
+#+END_SRC
+
+* Handlers
+
+#+BEGIN_SRC yaml :tangle ssh-hardening/handlers/main.yml
+---
+- name: restart ssh
+  service:
+    name: ssh
+    state: restarted
+
+- name: restart fail2ban
+  service:
+    name: fail2ban
+    state: restarted
+#+END_SRC
+
+* Meta
+
+#+BEGIN_SRC yaml :tangle ssh-hardening/meta/main.yml
+---
+galaxy_info:
+  author: Your Name
+  description: Harden SSH with firewall and fail2ban
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+dependencies: []
+#+END_SRC
+
+* Main Entry Points
+
+#+BEGIN_SRC yaml :tangle ssh-hardening/tasks/main.yml
+---
+- import_tasks: ufw.yml
+- import_tasks: ssh.yml
+- import_tasks: fail2ban.yml
+#+END_SRC

@@ -1,0 +1,73 @@
+#+TITLE: Common Setup
+#+AUTHOR: mist3rtuna
+#+DATE: 2025-05-31
+#+PROPERTY: HEADER-ARGS:ansible :tangle ./roles/common/tasks/main.yml :mkdirp yes :comments link
+#+PROPERTY: LAYOUT: base
+#+PROPERTY: ACTIVE: true
+#+OPTIONS: toc:2
+
+* Overview
+This file defines the common setup steps and initialization logic shared across all hosts and services in the cluster. It also catalogs which modules are available and whether they should be activated when tangling.
+
+* Tasks
+
+** Package Requirements
+#+begin_src ansible
+- name: Ensure base packages are present
+  package:
+    name:
+      - git
+      - curl
+      - vim
+      - gnupg
+    state: present
+#+end_src
+
+** System Updates
+#+begin_src ansible
+- name: Update all packages
+  apt:
+    upgrade: dist
+    update_cache: yes
+#+end_src
+
+** Create Base User
+#+begin_src ansible
+- name: Ensure ansible user exists
+  user:
+    name: ansible
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+#+end_src
+
+* Module Catalog
+This table lists the available modules and their active states for tangling and inclusion in the primary playbook.
+
+| Module          | Path                       | Active | Layout   |
+|-----------------+----------------------------+--------+----------|
+| Common          | ./Literal/common.org       | yes    | base     |
+| Tailscale       | ./Literal/tailscale.org    | yes    | app      |
+| SSH Hardening   | ./Literal/ssh.org          | yes    | security |
+| Fail2Ban        | ./Literal/fail2ban.org     | yes    | security |
+| Firewall        | ./Literal/firewall.org     | yes    | security |
+| Monitor         | ./Literal/monitor.org      | yes    | monitor  |
+| DNS             | ./Literal/dns.org          | yes    | dns      |
+| Secrets         | ./Literal/secrets.org      | yes    | security |
+| Git Server      | ./Literal/git.org          | yes    | service  |
+
+To activate or deactivate modules, toggle the ~:ACTIVE:~ property within each Org file or edit the catalog here.
+
+* Tangling Workflow
+1. Edit each module and ensure ~:ACTIVE:~ is set to true for modules to include.
+2. Tangle using =org-babel-tangle= or automatically via Emacs hook.
+3. Deploy via Ansible playbook using:
+
+#+begin_src shell
+ansible-playbook playbook/playbook.yml -i inventory.yml
+#+end_src
+
+* Notes
+- This file should remain in the project root.
+- All literal config files live in =Literal/=.
+- Use this document as the central control panel for your infrastructure setup.

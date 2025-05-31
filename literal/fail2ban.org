@@ -1,0 +1,60 @@
+#+TITLE: fail2ban Role
+#+AUTHOR: Your Name
+#+DATE: 2025-05-31
+#+DESCRIPTION: Ansible role to install and configure fail2ban for SSH brute-force protection.
+
+* Notes
+  This role installs fail2ban on the target host, sets up a basic jail configuration
+  focusing on SSH protection, and ensures the service is enabled and running.
+
+  You can expand this role later with custom filters, actions, or support for other services.
+
+* Variables
+  - fail2ban_jail_local: Path to local jail configuration (default: /etc/fail2ban/jail.local)
+  - fail2ban_service_name: Service name (default: fail2ban)
+
+* Ansible Role: fail2ban
+  #+BEGIN_SRC yaml :tangle literal/roles/fail2ban/tasks/main.yml :noweb yes :exports code
+  ---
+  - name: Install fail2ban package
+    apt:
+      name: fail2ban
+      state: present
+      update_cache: yes
+
+  - name: Configure fail2ban jail.local for ssh protection
+    copy:
+      dest: /etc/fail2ban/jail.local
+      content: |
+        [sshd]
+        enabled = true
+        port = ssh
+        filter = sshd
+        logpath = /var/log/auth.log
+        maxretry = 5
+        bantime = 3600
+    notify:
+      - restart fail2ban
+
+  - name: Ensure fail2ban service is enabled and running
+    systemd:
+      name: fail2ban
+      state: started
+      enabled: yes
+
+  #+END_SRC
+
+* Handlers
+  #+BEGIN_SRC yaml :tangle literal/roles/fail2ban/handlers/main.yml :noweb yes :exports code
+  ---
+  - name: restart fail2ban
+    systemd:
+      name: fail2ban
+      state: restarted
+  #+END_SRC
+
+* Notes on usage
+  - This role assumes Debian-based systems using apt and systemd.
+  - For other distros, you may need to adjust package manager or service names.
+  - You can customize maxretry, bantime, and other options in jail.local to suit your security needs.
+

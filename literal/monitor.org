@@ -1,0 +1,144 @@
+#+TITLE: Monitor
+#+AUTHOR: Your Name
+#+DATE: 2025-05-31
+#+STARTUP: showeverything
+#+PROPERTY: HEADER-ARGS:ANSIBLE :tangle ../playbook/roles/monitor/tasks/main.yml :mkdirp yes :comments org :exports code
+#+PROPERTY: :ENABLED: t
+#+PROPERTY: :TAGS: monitor observability devops
+#+PROPERTY: :LAYOUT: dev
+
+* Overview
+:PROPERTIES:
+:EXPORT_FILE_NAME: monitor-overview
+:END:
+
+This role sets up a full observability stack for monitoring, logging, and cluster management in a Kubernetes-based infrastructure.
+
+The supported layout options are:
+
+- ~dashboard~: Kubernetes Dashboard with metrics + Calico UI + Cockpit
+- ~lens~: Lens IDE (requires local install, can be tunneled via SSH or Tailscale)
+- ~kl8ns~: Lens + Kubernetes Dashboard combo
+- ~cockpit~: Lightweight host dashboard and manager
+- ~dev~: Includes all of the above in tabbed layout inside Lens (if available)
+
+Regardless of layout choice, best practices for logging and metrics will always be installed:
+- Prometheus
+- Grafana
+- Loki
+- Node Exporter
+- kube-state-metrics
+- Goldilocks
+- kubeview
+
+* Dependencies
+
+This role assumes the following:
+- Kubernetes cluster is operational (e.g., via k3s)
+- Helm is installed
+- Tailscale is optionally used for secure access
+- SSH access is configured
+
+* 📦 Packages
+
+** Required (Common)
+- prometheus
+- grafana
+- loki
+- kube-state-metrics
+- node-exporter
+- goldilocks
+- kubeview
+
+** Optional (Based on Layout)
+- kubernetes-dashboard
+- calicoctl + Calico UI
+- cockpit
+- lens (local app or tunnelable)
+- popeye
+- helm-dashboard
+
+* 🧠 Notes
+
+#+BEGIN_NOTE
+Lens must be installed on your local workstation. It connects securely over the kubeconfig or a tunnel (e.g., Tailscale, SSH).
+Kubernetes Dashboard can be enabled on its own or used inside Lens tabs.
+#+END_NOTE
+
+#+BEGIN_NOTE
+Goldilocks recommends resource requests/limits.
+Kubeview provides a visual map of your Kubernetes objects.
+Calico provides advanced network policy management and visualization.
+#+END_NOTE
+
+#+BEGIN_NOTE
+You can toggle between layouts by updating the ~:LAYOUT:~ property in this Org file.
+#+END_NOTE
+
+* 🛠️ Tasks
+
+#+BEGIN_SRC yaml
+- name: Install kube-prometheus-stack (Prometheus + Grafana + AlertManager)
+  ansible.builtin.include_role:
+    name: prometheus-community.kube-prometheus-stack
+
+- name: Deploy kube-state-metrics
+  ansible.builtin.helm:
+    name: kube-state-metrics
+    chart: prometheus-community/kube-state-metrics
+    release_namespace: monitoring
+    create_namespace: true
+    update_repo_cache: true
+
+- name: Deploy Loki for logs
+  ansible.builtin.helm:
+    name: loki
+    chart: grafana/loki-stack
+    release_namespace: monitoring
+    create_namespace: true
+    update_repo_cache: true
+
+- name: Deploy Goldilocks
+  ansible.builtin.helm:
+    name: goldilocks
+    chart: fairwinds-stable/goldilocks
+    release_namespace: goldilocks
+    create_namespace: true
+    update_repo_cache: true
+
+- name: Deploy kubeview
+  ansible.builtin.helm:
+    name: kubeview
+    chart: benc-uk/kubeview
+    release_namespace: kubeview
+    create_namespace: true
+    update_repo_cache: true
+
+- name: Deploy Kubernetes Dashboard
+  when: "'dashboard' in layout or 'kl8ns' in layout or 'dev' in layout"
+  ansible.builtin.helm:
+    name: kubernetes-dashboard
+    chart: kubernetes-dashboard/kubernetes-dashboard
+    release_namespace: kube-dashboard
+    create_namespace: true
+    update_repo_cache: true
+
+- name: Deploy Calico UI
+  when: "'dashboard' in layout or 'dev' in layout"
+  ansible.builtin.shell: |
+    calicoctl apply -f https://docs.projectcalico.org/manifests/tigera-operator.yaml
+
+- name: Enable Cockpit Dashboard
+  when: "'cockpit' in layout or 'dev' in layout"
+  ansible.builtin.apt:
+    name: cockpit
+    state: present
+    update_cache: yes
+
+- name: Display Lens Installation Note
+  when: "'lens' in layout or 'dev' in layout"
+  ansible.builtin.debug:
+    msg: >
+      Please install Lens manually from https://k8slens.dev/ and import your kubeconfig.
+      For dev layout, open each dashboard in a tab via extensions or via browser tunneling.
+#+END_SRC

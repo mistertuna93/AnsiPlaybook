@@ -1,0 +1,104 @@
+#+TITLE: Ansible Playbook Scaffold - Common Role
+#+AUTHOR: Your Name
+#+DATE: 2025-05-31
+#+PROPERTY: header-args :tangle yes :eval no
+
+* Ansible Role: common
+  This role will handle common system setup tasks, such as updating the system,
+  installing essential packages, and configuring basic settings.
+
+** Role directory structure
+
+#+BEGIN_SRC sh :tangle common/00-setup.sh :noweb no
+mkdir -p common/{tasks,handlers,templates,files,vars,defaults,meta}
+touch common/tasks/main.yml
+touch common/handlers/main.yml
+touch common/vars/main.yml
+touch common/defaults/main.yml
+touch common/meta/main.yml
+#+END_SRC
+
+** tasks/main.yml - Main tasks for common role
+
+#+BEGIN_SRC yaml :tangle common/tasks/main.yml
+---
+# tasks file for common role
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    upgrade: dist
+  become: yes
+
+- name: Install essential packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - vim
+      - htop
+    state: present
+  become: yes
+#+END_SRC
+
+** handlers/main.yml - Handlers for common role
+
+#+BEGIN_SRC yaml :tangle common/handlers/main.yml
+---
+# handlers file for common role
+- name: Restart ssh
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+#+END_SRC
+
+** vars/main.yml - Variables for common role
+
+#+BEGIN_SRC yaml :tangle common/vars/main.yml
+---
+# variables file for common role
+essential_packages:
+  - git
+  - curl
+  - vim
+  - htop
+#+END_SRC
+
+** defaults/main.yml - Default variables for common role
+
+#+BEGIN_SRC yaml :tangle common/defaults/main.yml
+---
+# default variables for common role
+package_update_cache_valid_time: 3600
+#+END_SRC
+
+** meta/main.yml - Role metadata
+
+#+BEGIN_SRC yaml :tangle common/meta/main.yml
+---
+galaxy_info:
+  author: Your Name
+  description: Common system setup tasks
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+dependencies: []
+#+END_SRC
+
+** Running the role: Example playbook
+
+#+BEGIN_SRC yaml :tangle playbook.yml
+---
+- name: Apply common role to all hosts
+  hosts: all
+  become: yes
+  roles:
+    - common
+#+END_SRC
